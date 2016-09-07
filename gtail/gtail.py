@@ -12,8 +12,12 @@ import requests
 import sys
 import time
 import urllib
+import getpass
+import warnings
+warnings.filterwarnings("ignore")
 
-MAX_DELAY = 10
+
+MAX_DELAY = 2
 DEFAULT_CONFIG_PATHS = [".gtail", os.path.expanduser("~/.gtail")]
 
 # returns a bold version of text using ansi characters
@@ -30,7 +34,7 @@ def fetch(server_config, url):
         auth = None
 
     headers = {"accept": "application/json"}
-    r = requests.get(url, auth=auth, headers=headers)
+    r = requests.get(url, auth=auth, headers=headers, verify=False)
     return r
 
 # gets a list of active streams
@@ -50,6 +54,7 @@ def fetch_streams(server_config):
 def list_streams(streams):
     streams = sorted(streams.values(), key=lambda s: s["title"].lower())
     for stream in streams:
+        print stream["id"],
         if stream["description"]:
             print bold(stream["title"]), "-", stream["description"]
         else:
@@ -59,17 +64,28 @@ def list_streams(streams):
 # message ID (None = start from some recent date)
 def fetch_messages(server_config,
         query = None,
+        fields = None,
         stream_ids = None,
-        last_message_id = None):
+        last_message_id = None,
+        last_timestamp = None):
+
+    range = 300
+   
     url = []
     url.append(server_config.uri)
-    url.append("/search/universal/relative?range=7200&limit=100")
+    if last_timestamp != None:
+       range = 5
+
+    url.append("/search/universal/relative?range=" + str(range) )
 
     # query terms
     if query:
         url.append("&query=" + urllib.quote_plus(query))
     else:
         url.append("&query=*")
+
+    if fields:
+       url.append("&fields=" + urllib.quote_plus(fields))
 
     # stream ID
     if stream_ids:
@@ -80,6 +96,7 @@ def fetch_messages(server_config,
 
     # fetch
     url = ''.join(url)
+
     r = fetch(server_config, url)
     if r.status_code != 200:
         raise Exception("Could not fetch messages from server. " \
@@ -120,26 +137,55 @@ def print_message(message, streams=None):
         for sid in stream_ids:
             stream_names.append(streams[sid]["title"])
         s.append("[" + ", ".join(stream_names) + "]")
-    if "facility" in message:
-        facility = message["facility"]
-        s.append(facility)
-    if "level" in message:
-        level = message["level"]
-        s.append(level)
+
+    # well known keys
     if "source" in message:
-        source = message["source"]
-        s.append(source)
-    if "loggerName" in message:
-        logger_name = message["loggerName"]
-        s.append(logger_name)
+       s.append(message["source"])
+
+    if "container_name" in message:
+       s.append(message["container_name"])
+
+    if "command" in message:
+       s.append( "[" + message["command"] + "]" )
+
+    if "logger_name" in message:
+       s.append( "[" + message["logger_name"] + "]")
+    
+    if "thread_name" in message:
+       s.append( "[" + message["thread_name"] + "]")
+
+    s.append( " - " )
+
+    for attr in message.keys():
+       if attr == "timestamp":
+          continue
+       if attr == "streams":
+          continue
+       if attr == "message":
+          continue
+       if attr == "full_message":
+          continue
+       if attr == "container_name":
+          continue
+       if attr == "thread_name":
+          continue
+       if attr == "source":
+          continue
+       if attr == "logger_name":
+          continue
+       if attr == "_id":
+          continue
+       if attr == "command":
+          continue
+
+       s.append( attr + ":" + message[attr] )
 
     if "full_message" in message:
         text = message["full_message"]
     else:
         text = message["message"]
 
-    print bold(" ".join(map(str, s)))
-    print text
+    print " ".join(map(str, s) ), text
 
 # config object and config parsing
 Config = namedtuple("Config", "server_config")
@@ -164,7 +210,10 @@ def parse_config(config_paths):
     try:
         password = config.get("server", "password")
     except:
-        password = None
+       if username != None:
+          password = getpass.getpass( "password: ")
+       else:
+          password = None
 
     return Config(ServerConfig(uri, username, password))
 
@@ -192,6 +241,8 @@ def find_stream_id(stream_name, streams):
     for stream in streams.values():
         s = stream["title"].lower()
         if s.startswith(stream_name):
+            stream_ids.append(stream["id"])
+        elif stream_name == stream["id"]:
             stream_ids.append(stream["id"])
 
     # if more than one id, reset, and require exact name match
@@ -234,6 +285,7 @@ This file should be located at any of the following paths: %s.
     parser.add_argument("--query", dest="query",
             nargs="+",
             help="Query terms to search on")
+    parser.add_argument("--fields", dest="fields", nargs="+", help="Fields to return")
     parser.add_argument("--config", dest="config_paths",
             nargs="+",
             help="Config files. Default: " + ", ".join(DEFAULT_CONFIG_PATHS))
@@ -281,24 +333,29 @@ This file should be located at any of the following paths: %s.
     #
 
     last_message_id = None
+    last_timestamp = None
     while True:
         # time-forward messages
         query = None
+        fields = None
         if args.query:
             query = ' '.join(args.query)
+        if args.fields:
+           fields = ' '.join(args.fields)
         try:
             messages = fetch_messages(
                     server_config = server_config,
                     query = query,
+                    fields = fields,
                     stream_ids = stream_ids,
-                    last_message_id = last_message_id)
+                    last_message_id = last_message_id,
+                    last_timestamp = last_timestamp)
         except Exception as e:
             print e
             time.sleep(MAX_DELAY)
             continue
 
         # print new messages
-        last_timestamp = None
         for m in messages:
             print_message(m, streams)
             last_message_id = m["_id"]
@@ -307,7 +364,9 @@ This file should be located at any of the following paths: %s.
         if last_timestamp:
             seconds_since_last_message = max(0, (datetime.datetime.utcnow() - last_timestamp).total_seconds())
             delay = min(seconds_since_last_message, MAX_DELAY)
-            if delay > 2:
+            if delay > MAX_DELAY:
+                time.sleep(MAX_DELAY)
+            else:
                 time.sleep(delay)
         else:
             time.sleep(MAX_DELAY)
