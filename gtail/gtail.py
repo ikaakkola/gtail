@@ -154,7 +154,7 @@ def print_message(message, streams=None):
     if "thread_name" in message:
        s.append( "[" + message["thread_name"] + "]")
 
-    s.append( " - " )
+    extraFields = False
 
     for attr in message.keys():
        if attr == "timestamp":
@@ -177,8 +177,11 @@ def print_message(message, streams=None):
           continue
        if attr == "command":
           continue
-       
-       s.append( attr + ":" + str(message[attr]) )
+       if attr == "stack_trace":
+          continue
+
+       extraFields = True
+       s.append( "[" +  attr + ":" + str(message[attr]) + "]" )
 
     if "full_message" in message:
         text = message["full_message"]
@@ -187,7 +190,17 @@ def print_message(message, streams=None):
     else:
         text = ""
 
+    if text != "" and extraFields:
+       s.append( " - " )
+
+    trace_text = None
+
+    if "stack_trace" in message:
+       trace_text = message["stack_trace"]
+
     print " ".join(map(str, s) ), text
+    if trace_text:
+       print "Stack trace: ", trace_text
 
 # config object and config parsing
 Config = namedtuple("Config", "server_config")
