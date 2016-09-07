@@ -177,13 +177,15 @@ def print_message(message, streams=None):
           continue
        if attr == "command":
           continue
-
-       s.append( attr + ":" + message[attr] )
+       
+       s.append( attr + ":" + str(message[attr]) )
 
     if "full_message" in message:
         text = message["full_message"]
-    else:
+    elif "message" in message:
         text = message["message"]
+    else:
+        text = ""
 
     print " ".join(map(str, s) ), text
 

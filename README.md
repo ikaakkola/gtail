@@ -16,15 +16,18 @@ A tool to tail Graylog logs in "real-time" using the Graylog REST API.
 
 ### Watch a stream
 
-`gtail --stream mississippi`
+`gtail --stream stream-id`
 
 ### Watch more than one stream
 
-`gtail --stream nile amazon`
+`gtail --stream stream-id-1 stream-id-2`
 
 ### Watch for query keywords
 
-`gtail --query some query here`
+`gtail --query "some query here"`
+
+### Specify fields to output
+`gtail --fields "message,some_field,another_field"`
 
 This uses Graylog's search mechanism, so you can use `field: value` syntax.
 
@@ -50,6 +53,14 @@ Install:
 ```
 pip install git+git://github.com/bvargo/gtail.git
 ```
+
+or
+
+```
+python setup.py build
+sudo python setup.py install
+```
+
 
 ## Configuration
 
