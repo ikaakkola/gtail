@@ -26,10 +26,10 @@ A tool to tail Graylog logs in "real-time" using the Graylog REST API.
 
 `gtail --query "some query here"`
 
+This uses Graylog's search mechanism, so you can use `field: value` syntax.
+
 ### Specify fields to output
 `gtail --fields "message,some_field,another_field"`
-
-This uses Graylog's search mechanism, so you can use `field: value` syntax.
 
 ### Watch a single stream for query keywords
 
